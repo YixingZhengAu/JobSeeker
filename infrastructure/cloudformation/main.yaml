@@ -1,0 +1,183 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Job Seeker Application - Complete infrastructure with ECS, ALB, and VPC'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [development, staging, production]
+    Description: Environment name
+  
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Domain name for the application (optional)
+  
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+  
+  # Server Configuration
+  ServerCpu:
+    Type: Number
+    Default: 256
+    AllowedValues: [256, 512, 1024, 2048]
+    Description: CPU units for server container
+  
+  ServerMemory:
+    Type: Number
+    Default: 512
+    AllowedValues: [512, 1024, 2048, 4096]
+    Description: Memory (MiB) for server container
+  
+  ServerDesiredCount:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+    Description: Desired number of server tasks
+  
+  # Client Configuration
+  ClientCpu:
+    Type: Number
+    Default: 256
+    AllowedValues: [256, 512, 1024, 2048]
+    Description: CPU units for client container
+  
+  ClientMemory:
+    Type: Number
+    Default: 512
+    AllowedValues: [512, 1024, 2048, 4096]
+    Description: Memory (MiB) for client container
+  
+  ClientDesiredCount:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+    Description: Desired number of client tasks
+  
+  # Environment Variables
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+    Description: OpenAI API Key
+  
+  OpenAIChatModel:
+    Type: String
+    Default: gpt-4o-mini
+    Description: OpenAI Chat Model Name
+  
+  OpenAIEmbeddingModel:
+    Type: String
+    Default: text-embedding-3-small
+    Description: OpenAI Embedding Model Name
+  
+  # Auto Scaling Configuration
+  ServerMinCapacity:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+    Description: Minimum number of server tasks
+  
+  ServerMaxCapacity:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    MaxValue: 10
+    Description: Maximum number of server tasks
+  
+  ClientMinCapacity:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+    Description: Minimum number of client tasks
+  
+  ClientMaxCapacity:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    MaxValue: 10
+    Description: Maximum number of client tasks
+
+Resources:
+  # VPC Stack
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: vpc.yaml
+      Parameters:
+        Environment: !Ref Environment
+        KeyPairName: !Ref KeyPairName
+  
+  # ECS Stack
+  ECSStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
+    Properties:
+      TemplateURL: ecs.yaml
+      Parameters:
+        Environment: !Ref Environment
+        VPCStackName: !Ref VPCStack
+        ServerCpu: !Ref ServerCpu
+        ServerMemory: !Ref ServerMemory
+        ServerDesiredCount: !Ref ServerDesiredCount
+        ClientCpu: !Ref ClientCpu
+        ClientMemory: !Ref ClientMemory
+        ClientDesiredCount: !Ref ClientDesiredCount
+        ServerMinCapacity: !Ref ServerMinCapacity
+        ServerMaxCapacity: !Ref ServerMaxCapacity
+        ClientMinCapacity: !Ref ClientMinCapacity
+        ClientMaxCapacity: !Ref ClientMaxCapacity
+        OpenAIApiKey: !Ref OpenAIApiKey
+        OpenAIChatModel: !Ref OpenAIChatModel
+        OpenAIEmbeddingModel: !Ref OpenAIEmbeddingModel
+  
+  # ALB Stack
+  ALBStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: [VPCStack, ECSStack]
+    Properties:
+      TemplateURL: alb.yaml
+      Parameters:
+        Environment: !Ref Environment
+        VPCStackName: !Ref VPCStack
+        ECSStackName: !Ref ECSStack
+        DomainName: !Ref DomainName
+
+Outputs:
+  VPCStackName:
+    Description: Name of the VPC stack
+    Value: !Ref VPCStack
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCStack"
+  
+  ECSStackName:
+    Description: Name of the ECS stack
+    Value: !Ref ECSStack
+    Export:
+      Name: !Sub "${AWS::StackName}-ECSStack"
+  
+  ALBStackName:
+    Description: Name of the ALB stack
+    Value: !Ref ALBStack
+    Export:
+      Name: !Sub "${AWS::StackName}-ALBStack"
+  
+  ClientLoadBalancerDNS:
+    Description: DNS name of the client load balancer
+    Value: !GetAtt ALBStack.Outputs.ClientLoadBalancerDNS
+  
+  ServerLoadBalancerDNS:
+    Description: DNS name of the server load balancer
+    Value: !GetAtt ALBStack.Outputs.ServerLoadBalancerDNS
+  
+  ClientServiceURL:
+    Description: URL to access the client application
+    Value: !Sub "http://${ALBStack.Outputs.ClientLoadBalancerDNS}"
+  
+  ServerHealthCheckURL:
+    Description: URL to check server health
+    Value: !Sub "http://${ALBStack.Outputs.ServerLoadBalancerDNS}/health"

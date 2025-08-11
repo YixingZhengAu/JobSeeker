@@ -1,0 +1,180 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY_SERVER: job-seeker-server
+  ECR_REPOSITORY_CLIENT: job-seeker-client
+  ECS_CLUSTER: production-job-seeker-cluster
+  ECS_SERVICE_SERVER: production-job-seeker-server
+  ECS_SERVICE_CLIENT: production-job-seeker-client
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r server/requirements.txt
+          pip install -r client/requirements.txt
+
+      - name: Run tests
+        run: |
+          python -m pytest test.py -v
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push server image to Amazon ECR
+        id: build-server-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd server
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_SERVER:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_SERVER:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push client image to Amazon ECR
+        id: build-client-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd client
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_CLIENT:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_CLIENT:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_CLIENT:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_CLIENT:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_CLIENT:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create EC2 key pair
+        run: |
+          aws ec2 create-key-pair \
+            --key-name job-seeker-key \
+            --query 'KeyMaterial' \
+            --output text > job-seeker-key.pem || echo "Key pair already exists"
+          chmod 400 job-seeker-key.pem || true
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation/main.yaml \
+            --stack-name job-seeker-production \
+            --parameter-overrides \
+              Environment=production \
+              KeyPairName=job-seeker-key \
+              OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
+              OpenAIChatModel=${{ secrets.OPENAI_CHAT_MODEL }} \
+              OpenAIEmbeddingModel=${{ secrets.OPENAI_EMBEDDING_MODEL }} \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+
+      - name: Update ECS services
+        run: |
+          # Update server service
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE_SERVER \
+            --force-new-deployment
+
+          # Update client service
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE_CLIENT \
+            --force-new-deployment
+
+      - name: Wait for deployment to complete
+        run: |
+          # Wait for server service to be stable
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE_SERVER
+
+          # Wait for client service to be stable
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE_CLIENT
+
+      - name: Get deployment URLs
+        run: |
+          # Get ALB DNS name
+          ALB_DNS=$(aws cloudformation describe-stacks \
+            --stack-name job-seeker-production \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClientServiceURL`].OutputValue' \
+            --output text)
+          
+          echo "Deployment completed successfully!"
+          echo "Client URL: $ALB_DNS"
+          echo "Server Health Check: ${ALB_DNS%:8501}/health"
+
+      - name: Health check
+        run: |
+          # Wait a bit for services to be fully ready
+          sleep 30
+          
+          # Get ALB DNS name
+          ALB_DNS=$(aws cloudformation describe-stacks \
+            --stack-name job-seeker-production \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClientServiceURL`].OutputValue' \
+            --output text)
+          
+          # Health check server
+          SERVER_URL="${ALB_DNS%:8501}/health"
+          echo "Checking server health at: $SERVER_URL"
+          curl -f "$SERVER_URL" || exit 1
+          
+          # Health check client
+          echo "Checking client health at: $ALB_DNS"
+          curl -f "$ALB_DNS" || exit 1

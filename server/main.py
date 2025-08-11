@@ -13,6 +13,13 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uvicorn
 import logging
+import os
+import sys
+from pathlib import Path
+
+current_dir = Path(__file__).parent
+parent_dir = current_dir.parent
+sys.path.insert(0, str(parent_dir))
 
 # Import the job recommendation function
 from job_recommender import recommend_jobs
@@ -146,10 +153,11 @@ if __name__ == "__main__":
     
     The server will run on localhost:8000 by default.
     """
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
-        "server:app",
+        "main:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True,
+        port=port,
+        reload=False,
         log_level="info"
     )

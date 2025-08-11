@@ -2,207 +2,291 @@
 
 A comprehensive job recommendation system that uses AI to match users with relevant job opportunities based on their skills, experience, and career goals.
 
-## 🚀 Features
+## Features
 
-- **AI-Powered Recommendations**: Uses OpenAI's language models to analyze user profiles and job descriptions
-- **Web Interface**: Beautiful Streamlit frontend for easy interaction
-- **REST API**: FastAPI backend for scalable and efficient job recommendations
-- **Real-time Processing**: Get instant job recommendations based on your profile
-- **Export Functionality**: Download your recommendations as JSON files
-- **Responsive Design**: Works on desktop and mobile devices
+- 🤖 **AI-Powered Recommendations**: Uses OpenAI's GPT models for intelligent job matching
+- 🌐 **Web Interface**: User-friendly Streamlit frontend
+- 🔧 **RESTful API**: FastAPI backend for job recommendations
+- 📊 **Detailed Job Information**: Comprehensive job details including skills, responsibilities, and requirements
+- 🚀 **High Availability**: Deployed on AWS with auto-scaling and load balancing
+- 🔄 **Automated CI/CD**: GitHub Actions for continuous deployment
 
-## 📋 Prerequisites
+## Architecture
 
-Before running this application, make sure you have:
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Streamlit     │    │   FastAPI       │    │   Job Data      │
+│   Frontend      │◄──►│   Backend       │◄──►│   Database      │
+│   (Client)      │    │   (Server)      │    │   (JSON Files)  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
 
-1. **Python 3.8+** installed on your system
-2. **OpenAI API Key** - You'll need to set up an OpenAI account and get an API key
-3. **Internet Connection** - Required for API calls and job data retrieval
+## Quick Start
 
-## 🛠️ Installation
+### Local Development
 
-### 1. Clone the Repository
-
+1. **Clone the repository**
 ```bash
 git clone <repository-url>
 cd JobSeeker
 ```
 
-### 2. Install Dependencies
-
+2. **Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Set Up Environment Variables
-
-Create a `.env` file in the root directory with your OpenAI API key:
-
+3. **Set up environment variables**
 ```bash
-# .env file
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_CHAT_MODEL=gpt-4o-mini
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-```
+   cp env.example .env
+   # Edit .env and add your OpenAI API key
+   ```
 
-**Important**: Replace `your_openai_api_key_here` with your actual OpenAI API key.
+4. **Run the application**
+   ```bash
+   # Terminal 1: Start the server
+   python server/main.py
+   
+   # Terminal 2: Start the client
+   streamlit run client/app.py
+   ```
 
-## 🚀 How to Use
+### Docker Development
 
-### Step 1: Start the Backend Server
-
-First, start the FastAPI server that handles job recommendations:
-
+1. **Build and run with Docker Compose**
 ```bash
-python server.py
-```
+   docker compose up --build
+   ```
 
-The server will start on `http://localhost:8000`. You should see output like:
-```
-INFO:     Started server process [xxxxx]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-```
+2. **Access the application**
+   - Client: http://localhost:8501
+   - Server API: http://localhost:8000
 
-### Step 2: Start the Frontend Client
+## AWS Deployment
 
-In a new terminal window, start the Streamlit frontend:
+This project includes a complete AWS deployment solution with high availability and auto-scaling.
 
+### Deployment Features
+
+- ✅ **ECS EC2**: Container orchestration with EC2 instances
+- ✅ **Application Load Balancer**: Traffic distribution
+- ✅ **VPC with Private/Public Subnets**: Network security
+- ✅ **Auto Scaling**: CPU-based scaling (2-4 instances)
+- ✅ **Health Checks**: Automatic health monitoring
+- ✅ **CloudWatch Logging**: Centralized logging
+- ✅ **CloudFormation**: Infrastructure as Code
+- ✅ **GitHub Actions**: Automated CI/CD
+
+### Quick Deployment
+
+1. **Set up AWS credentials**
+   ```bash
+   aws configure
+   ```
+
+2. **Deploy to AWS**
+   ```bash
+   OPENAI_API_KEY=your_key_here ./infrastructure/scripts/deploy.sh
+   ```
+
+3. **Access your application**
+   - The deployment script will output the URLs
+   - Client: `http://your-alb-dns:8501`
+   - Server Health: `http://your-alb-dns/health`
+
+### Automated CI/CD
+
+1. **Push to GitHub**
 ```bash
-streamlit run client.py
-```
+   git push origin main
+   ```
 
-The Streamlit app will open in your default browser at `http://localhost:8501`.
+2. **Automatic deployment**
+   - GitHub Actions will automatically deploy to AWS
+   - No manual intervention required
 
-### Step 3: Get Job Recommendations
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-1. **Enter Your Profile**: In the sidebar, describe your skills, experience, and career goals
-2. **Choose Number of Recommendations**: Use the slider to select how many jobs you want (1-10)
-3. **Get Recommendations**: Click the "🚀 Get Recommendations" button
-4. **Review Results**: Browse through the recommended jobs with detailed information
-5. **Export (Optional)**: Download your recommendations as a JSON file
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 JobSeeker/
-├── client.py                 # Streamlit frontend application
-├── server.py                 # FastAPI backend server
-├── config.py                 # Configuration settings
-├── requirements.txt          # Python dependencies
-├── README.md                 # This file
-├── test.py                   # Test script for job recommender
-└── job_recommender/          # Core job recommendation module
-    ├── __init__.py
-    ├── job_recommender.py
-    ├── job_description_analyzer.py
-    ├── job_reranker.py
-    ├── seek_scraper.py
-    ├── utils.py
-    ├── prompts/              # AI prompt templates
-    └── job_urls_database/    # Job data storage
+├── server/                          # FastAPI server
+│   ├── main.py                      # Server application
+│   ├── requirements.txt             # Server dependencies
+│   └── Dockerfile                   # Server container
+├── client/                          # Streamlit client
+│   ├── app.py                       # Client application
+│   ├── requirements.txt             # Client dependencies
+│   └── Dockerfile                   # Client container
+├── job_recommender/                 # Core recommendation engine
+│   ├── job_recommender.py           # Main recommendation logic
+│   ├── job_description_analyzer.py  # Job analysis
+│   ├── job_reranker.py              # Job ranking
+│   ├── seek_scraper.py              # Job scraping
+│   └── job_urls_database/           # Job data storage
+├── infrastructure/                  # AWS infrastructure
+│   ├── cloudformation/              # CloudFormation templates
+│   │   ├── main.yaml                # Main stack
+│   │   ├── vpc.yaml                 # VPC configuration
+│   │   ├── ecs.yaml                 # ECS configuration
+│   │   └── alb.yaml                 # Load balancer configuration
+│   └── scripts/                     # Deployment scripts
+│       └── deploy.sh                # Manual deployment script
+├── .github/                         # GitHub Actions
+│   └── workflows/
+│       └── deploy.yml               # CI/CD pipeline
+├── docker-compose.yml               # Local development
+├── env.example                      # Environment template
+├── DEPLOYMENT.md                    # Deployment guide
+└── README.md                        # This file
 ```
 
-## 🔧 Configuration
+## API Documentation
+
+### Server Endpoints
+
+- `GET /health` - Health check
+- `POST /recommend` - Get job recommendations
+
+### Request Format
+
+```json
+{
+  "description": "I am a software engineer with 5 years of experience...",
+  "top_n": 3
+}
+```
+
+### Response Format
+
+```json
+{
+  "success": true,
+  "jobs": [
+    {
+      "url": "https://example.com/job",
+      "title": "Senior Software Engineer",
+      "company": "Tech Company",
+      "mandatory skills": "Python, JavaScript, React",
+      "nice to have skills": "AWS, Docker, Kubernetes",
+      "soft skills": "Communication, Leadership",
+      "experience industries": "Technology, Finance",
+      "responsibilities": "Lead development team..."
+    }
+  ],
+  "message": "Successfully found 3 job recommendations"
+}
+```
+
+## Configuration
 
 ### Environment Variables
 
-The following environment variables can be configured in your `.env` file:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_API_KEY` | OpenAI API key | Required |
+| `OPENAI_CHAT_MODEL` | Chat model name | `gpt-4o-mini` |
+| `OPENAI_EMBEDDING_MODEL` | Embedding model name | `text-embedding-3-small` |
+| `API_BASE_URL` | Server API URL | `http://localhost:8000` |
 
-- `OPENAI_API_KEY`: Your OpenAI API key (required)
-- `OPENAI_CHAT_MODEL`: OpenAI chat model to use (default: gpt-4o-mini)
-- `OPENAI_EMBEDDING_MODEL`: OpenAI embedding model to use (default: text-embedding-3-small)
+### AWS Configuration
 
-### API Endpoints
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `Environment` | Environment name | `production` |
+| `ServerCpu` | Server CPU units | `256` |
+| `ServerMemory` | Server memory (MiB) | `512` |
+| `ClientCpu` | Client CPU units | `256` |
+| `ClientMemory` | Client memory (MiB) | `512` |
+| `ServerDesiredCount` | Server task count | `2` |
+| `ClientDesiredCount` | Client task count | `2` |
 
-The FastAPI server provides the following endpoints:
+## Monitoring and Logging
 
-- `GET /`: Health check and server status
-- `GET /health`: Detailed health information
-- `POST /recommend`: Get job recommendations (main endpoint)
+### CloudWatch Logs
+- Server logs: `/ecs/{environment}-job-seeker-server`
+- Client logs: `/ecs/{environment}-job-seeker-client`
 
-## 💡 Usage Examples
+### Health Checks
+- Server: `GET /health` every 30 seconds
+- Client: `GET /_stcore/health` every 30 seconds
 
-### Example User Descriptions
+### Auto Scaling
+- CPU utilization threshold: 70%
+- Scale-out cooldown: 60 seconds
+- Scale-in cooldown: 60 seconds
 
-Here are some example descriptions you can use to test the system:
+## Cost Estimation
 
-**Software Engineer:**
+### Monthly AWS Costs (us-east-1)
+- **EC2 Instances**: $30-50 (2 t3.medium instances)
+- **ALB**: $20-30
+- **NAT Gateway**: $45
+- **CloudWatch**: $10-20
+- **Data Transfer**: $10-20
+- **Total**: $115-165/month
+
+*Costs may vary based on usage and region*
+
+## Development
+
+### Running Tests
+```bash
+# Test local setup
+python test_local_setup.py
+
+# Test deployment
+python test_deployment.py
 ```
-I am a software engineer with 3 years of experience in Python, JavaScript, and React. 
-I have worked on full-stack web applications and have experience with cloud platforms like AWS. 
-I'm passionate about clean code and agile development practices.
+
+### Local Testing
+```bash
+# Test server
+curl http://localhost:8000/health
+
+# Test client
+curl http://localhost:8501/_stcore/health
+
+# Test job recommendation
+curl -X POST http://localhost:8000/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"description": "Software engineer with Python experience", "top_n": 2}'
 ```
 
-**Data Scientist:**
-```
-I am a data scientist with 4 years of experience in Python, R, and SQL. 
-I have expertise in machine learning, statistical analysis, and data visualization. 
-I have worked with large datasets and have experience with tools like TensorFlow, scikit-learn, and Tableau.
-```
-
-**Product Manager:**
-```
-I am a product manager with 6 years of experience in software product development. 
-I have successfully launched multiple products and have experience with agile methodologies, 
-user research, and market analysis. I'm passionate about creating user-centric solutions.
-```
-
-## 🔍 How It Works
-
-1. **User Input**: Users provide their skills, experience, and career goals through the web interface
-2. **AI Analysis**: The system uses OpenAI's language models to analyze the user's profile
-3. **Job Matching**: The system compares the user's profile with available job descriptions
-4. **Ranking**: Jobs are ranked based on similarity scores and relevance
-5. **Results**: Users receive personalized job recommendations with detailed information
-
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
-**1. Server Connection Error**
-- Make sure the FastAPI server is running (`python server.py`)
-- Check that the server is running on port 8000
-- Verify your firewall settings
+1. **Server not starting**
+   - Check OpenAI API key is set
+   - Verify all dependencies are installed
+   - Check port 8000 is available
 
-**2. OpenAI API Error**
-- Ensure your OpenAI API key is correctly set in the `.env` file
-- Check that you have sufficient API credits
-- Verify the API key has the necessary permissions
+2. **Client not connecting to server**
+   - Verify server is running on port 8000
+   - Check `API_BASE_URL` environment variable
+   - Ensure CORS is properly configured
 
-**3. No Job Recommendations Found**
-- Try being more specific in your description
-- Include relevant skills, experience, and location preferences
-- Check that the job database has been populated
+3. **AWS deployment failures**
+   - Check AWS credentials and permissions
+   - Verify CloudFormation template syntax
+   - Review CloudWatch logs for errors
 
-**4. Import Errors**
-- Make sure all dependencies are installed: `pip install -r requirements.txt`
-- Verify you're using Python 3.8 or higher
+### Debug Commands
 
-### Getting Help
+```bash
+# Check ECS services
+aws ecs list-services --cluster production-job-seeker-cluster
 
-If you encounter any issues:
+# Check service logs
+aws logs tail /ecs/production-job-seeker-server --follow
 
-1. Check the console output for error messages
-2. Verify all environment variables are set correctly
-3. Ensure both server and client are running
-4. Check the logs in the terminal for detailed error information
+# Check ALB health
+aws elbv2 describe-target-health --target-group-arn your-target-group-arn
+```
 
-## 📊 API Documentation
-
-When the server is running, you can access the interactive API documentation at:
-- **Swagger UI**: `http://localhost:8000/docs`
-- **ReDoc**: `http://localhost:8000/redoc`
-
-## 🔒 Security Notes
-
-- Keep your OpenAI API key secure and never commit it to version control
-- In production, use proper authentication and authorization
-- Consider rate limiting for API endpoints
-- Use HTTPS in production environments
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -210,17 +294,17 @@ When the server is running, you can access the interactive API documentation at:
 4. Add tests if applicable
 5. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🙏 Acknowledgments
+## Support
 
-- OpenAI for providing the language models
-- Streamlit for the web framework
-- FastAPI for the backend framework
-- The open-source community for various dependencies
+For issues and questions:
+1. Check the [DEPLOYMENT.md](DEPLOYMENT.md) for deployment issues
+2. Review CloudWatch logs for application errors
+3. Open an issue on GitHub
 
 ---
 
-**Happy Job Hunting! 🎯**
+**Built with ❤️ using FastAPI, Streamlit, and AWS**

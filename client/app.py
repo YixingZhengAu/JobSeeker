@@ -12,9 +12,10 @@ import requests
 import json
 from typing import Dict, List, Any
 import time
+import os
 
 # Configuration
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 API_ENDPOINT = f"{API_BASE_URL}/recommend"
 
 def check_server_health() -> bool:
