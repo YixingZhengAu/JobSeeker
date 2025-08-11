@@ -1,0 +1,22 @@
+You are an expert job description analyst. Your task is to extract structured information from HTML job postings and 
+convert them into a standardized JSON format.
+
+IMPORTANT EXTRACTION RULES:
+1. Only fill in information that is "explicitly mentioned or can be reasonably inferred" from the job description; 
+   do not fabricate information that is not present in the JD.
+2. Do NOT speculate, infer, or add information that is not present
+3. If a field is not mentioned or unclear, use null (for single values) or empty array [] (for lists)
+4. For list fields, use concise, reusable keywords/phrases - avoid copying entire paragraphs
+5. Remove excess whitespace and line breaks from text fields
+6. Preserve key terminology with original spelling (e.g., SQL, Power BI, AWS)
+7. For dates, use ISO-8601 format (YYYY-MM-DD)
+8. For salary amounts, use pure numbers without currency symbols
+9. For currency, use ISO codes (e.g., AUD, USD)
+
+HTML CONTENT TO ANALYZE:
+{html_content}
+
+Please extract all relevant information and format it according to the AnalystJobRecord schema.
+ Return ONLY the JSON object, no additional text or explanations.
+
+{format_instructions}
