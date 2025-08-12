@@ -1,4 +1,4 @@
-name: Deploy to AWS
+name: Deploy to AWS with Terraform
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ap-southeast-2
   ECR_REPOSITORY_SERVER: job-seeker-server
   ECR_REPOSITORY_CLIENT: job-seeker-client
   ECS_CLUSTER: production-job-seeker-cluster
@@ -99,6 +99,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
       - name: Create EC2 key pair
         run: |
           aws ec2 create-key-pair \
@@ -107,19 +112,21 @@ jobs:
             --output text > job-seeker-key.pem || echo "Key pair already exists"
           chmod 400 job-seeker-key.pem || true
 
-      - name: Deploy CloudFormation stack
+      - name: Deploy with Terraform
+        working-directory: infrastructure/terraform
+        env:
+          TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          TF_VAR_openai_chat_model: ${{ secrets.OPENAI_CHAT_MODEL }}
+          TF_VAR_openai_embedding_model: ${{ secrets.OPENAI_EMBEDDING_MODEL }}
         run: |
-          aws cloudformation deploy \
-            --template-file infrastructure/cloudformation/main.yaml \
-            --stack-name job-seeker-production \
-            --parameter-overrides \
-              Environment=production \
-              KeyPairName=job-seeker-key \
-              OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
-              OpenAIChatModel=${{ secrets.OPENAI_CHAT_MODEL }} \
-              OpenAIEmbeddingModel=${{ secrets.OPENAI_EMBEDDING_MODEL }} \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
+          # Initialize Terraform
+          terraform init
+          
+          # Plan deployment
+          terraform plan -out=tfplan
+          
+          # Apply deployment
+          terraform apply -auto-approve tfplan
 
       - name: Update ECS services
         run: |
@@ -148,33 +155,33 @@ jobs:
             --services $ECS_SERVICE_CLIENT
 
       - name: Get deployment URLs
+        working-directory: infrastructure/terraform
         run: |
-          # Get ALB DNS name
-          ALB_DNS=$(aws cloudformation describe-stacks \
-            --stack-name job-seeker-production \
-            --query 'Stacks[0].Outputs[?OutputKey==`ClientServiceURL`].OutputValue' \
-            --output text)
+          # Get ALB DNS name from Terraform output
+          ALB_DNS=$(terraform output -raw load_balancer_dns)
+          CLIENT_URL=$(terraform output -raw client_service_url)
+          SERVER_URL=$(terraform output -raw server_service_url)
           
           echo "Deployment completed successfully!"
-          echo "Client URL: $ALB_DNS"
-          echo "Server Health Check: ${ALB_DNS%:8501}/health"
+          echo "Load Balancer DNS: $ALB_DNS"
+          echo "Client URL: $CLIENT_URL"
+          echo "Server URL: $SERVER_URL"
 
       - name: Health check
+        working-directory: infrastructure/terraform
         run: |
           # Wait a bit for services to be fully ready
           sleep 30
           
-          # Get ALB DNS name
-          ALB_DNS=$(aws cloudformation describe-stacks \
-            --stack-name job-seeker-production \
-            --query 'Stacks[0].Outputs[?OutputKey==`ClientServiceURL`].OutputValue' \
-            --output text)
+          # Get URLs from Terraform output
+          ALB_DNS=$(terraform output -raw load_balancer_dns)
+          SERVER_HEALTH_URL="http://$ALB_DNS/health"
+          CLIENT_URL=$(terraform output -raw client_service_url)
           
           # Health check server
-          SERVER_URL="${ALB_DNS%:8501}/health"
-          echo "Checking server health at: $SERVER_URL"
-          curl -f "$SERVER_URL" || exit 1
+          echo "Checking server health at: $SERVER_HEALTH_URL"
+          curl -f "$SERVER_HEALTH_URL" || exit 1
           
           # Health check client
-          echo "Checking client health at: $ALB_DNS"
-          curl -f "$ALB_DNS" || exit 1
+          echo "Checking client health at: $CLIENT_URL"
+          curl -f "$CLIENT_URL" || exit 1

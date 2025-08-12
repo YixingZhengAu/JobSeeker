@@ -54,7 +54,7 @@ def get_job_recommendations(description: str, top_n: int) -> Dict[str, Any]:
         API_ENDPOINT,
         json=payload,
         headers={"Content-Type": "application/json"},
-        timeout=30
+        timeout=120
     )
     
     response.raise_for_status()

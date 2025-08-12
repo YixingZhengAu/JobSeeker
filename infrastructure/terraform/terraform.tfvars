@@ -1,0 +1,6 @@
+environment = "production"
+aws_region = "ap-southeast-2"
+key_pair_name = "job-seeker-key"
+openai_api_key = "your_openai_api_key_here"
+openai_chat_model = "gpt-4o-mini"
+openai_embedding_model = "text-embedding-3-small"
