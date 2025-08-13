@@ -7,10 +7,18 @@ from langchain.schema import HumanMessage
 import os
 from dotenv import load_dotenv
 
-from .seek_scraper import SeekJobScraper
-from .utils import load_prompt, save_json, read_json
-from .job_description_analyzer import JobDescriptionAnalyzer
-from .job_reranker import JobReranker
+# Use relative imports when imported as module
+try:
+    from .seek_scraper import SeekJobScraper
+    from .utils import load_prompt, save_json, read_json
+    from .job_description_analyzer import JobDescriptionAnalyzer
+    from .job_reranker import JobReranker
+except ImportError:
+    # Fallback to absolute imports if relative imports fail
+    from seek_scraper import SeekJobScraper
+    from utils import load_prompt, save_json, read_json
+    from job_description_analyzer import JobDescriptionAnalyzer
+    from job_reranker import JobReranker
 
 
 class JobTitleRecord(BaseModel):
@@ -283,28 +291,29 @@ class JobRecommender(object):
         return job_urls
 
 
-    def recommend_jobs(self, description: str, top_n: int = 3) -> List[str]:
+    def recommend_jobs_urls(self, description: str, top_n: int = 10) -> List[str]:
         """
-        Recommend jobs based on a person's description
+        Recommend jobs urls based on a person's description
 
         Args:
             description (str): A description of the person's skills, experience, and career goals
-            top_n (int): Number of top jobs to return
+            top_n (int): Number of top job urls to return
 
         Returns:
-            List[Tuple[str, float, Dict]]: Top N jobs sorted by similarity. List of tuples containing (url, similarity_score, job_detail)
+            List[str]: A list of job URLs recommended for the user, sorted by relevance.
         """
         recommendations = self.recommend_titles(description)
-        recommendations.job_titles = ["Data Scientist", "machine learning engineer"]
 
         job_urls = self.get_job_urls_by_recommds(recommendations)
-        job_details = self.get_job_details_by_urls(job_urls)
-        reranked_jobs = self.reranker.get_top_jobs(description, job_details, top_n=top_n)
-        return reranked_jobs
+        
+        # Limit the number of URLs returned based on top_n parameter
+        return job_urls[:top_n]
 
 
 def main():
     """Example usage of JobRecommender"""
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import config
     # Initialize the JobRecommender
     # You can either provide the API key directly or set it in your .env file
@@ -324,30 +333,8 @@ def main():
     try:
         # Get job recommendations
         print("Generating job recommendations...")
-        recommendations = recommender.recommend_titles(description)
-        
-        print("\n=== Job Title Recommendations ===")
-        print(f"Recommended Job Titles:")
-        for i, title in enumerate(recommendations.job_titles, 1):
-            print(f"{i}. {title}")
-        print(f"\nDesired Location: {recommendations.location}")
-
-        # Get job URLs for the recommended job titles
-        print("\n=== Getting Job URLs ===")
-        job_urls = recommender.get_job_urls_by_recommds(recommendations)
-        print(f"Found {len(job_urls)} job URLs in total")
-
-        #  get job details by job urls
-        job_details = recommender.get_job_details_by_urls(job_urls)
-        print(f"Found {len(job_details)} job details in total")
-
-        # Rerank jobs
-        reranked_jobs = recommender.reranker.get_top_jobs(description, job_details, top_n=3)
-        for job_url, similarity, job_detail in reranked_jobs:
-            print(f"Job URL: {job_url}")
-            print(f"Similarity: {similarity}")
-            print(f"Job Detail: {job_detail['job_title']} at {job_detail['company_name']}")
-            print("-"*100)
+        jobs = recommender.recommend_jobs_urls(description)
+        print(jobs) 
 
         
     except Exception as e:

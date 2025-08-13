@@ -40,7 +40,7 @@ def get_job_recommendations(description: str, top_n: int) -> Dict[str, Any]:
         top_n (int): Number of job recommendations to request
         
     Returns:
-        Dict[str, Any]: Response from the server containing job recommendations
+        Dict[str, Any]: Response from the server containing job URLs
         
     Raises:
         requests.exceptions.RequestException: If the request fails
@@ -60,56 +60,125 @@ def get_job_recommendations(description: str, top_n: int) -> Dict[str, Any]:
     response.raise_for_status()
     return response.json()
 
-def display_job_card(job: Dict[str, Any], index: int):
+def get_job_detail(job_url: str) -> Dict[str, Any]:
     """
-    Display a single job recommendation in a formatted card.
+    Send a request to the FastAPI server to get job details.
     
     Args:
-        job (Dict[str, Any]): Job information dictionary
+        job_url (str): The job URL to get details for
+        
+    Returns:
+        Dict[str, Any]: Response from the server containing job details
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    payload = {
+        "job_url": job_url
+    }
+    
+    response = requests.post(
+        f"{API_BASE_URL}/job-detail",
+        json=payload,
+        headers={"Content-Type": "application/json"},
+        timeout=120
+    )
+    
+    response.raise_for_status()
+    return response.json()
+
+def display_job_url_card(job_url: str, index: int):
+    """
+    Display a single job URL in a formatted card with job details functionality.
+    
+    Args:
+        job_url (str): Job URL to display
         index (int): Index of the job in the list
     """
     with st.container():
         st.markdown("---")
         
         # Create columns for layout
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3 = st.columns([2, 1, 1])
         
         with col1:
-            # Job title and company
-            title = job.get('title', 'N/A')
-            company = job.get('company', 'N/A')
-            
-            st.markdown(f"### {index + 1}. {title}")
-            if company != 'N/A':
-                st.markdown(f"**Company:** {company}")
+            # Job title display
+            st.markdown(f"### {index + 1}. Job Opportunity")
             
         with col2:
             # Job URL button
-            if job.get('url'):
-                st.link_button("View Job", job['url'], type="primary")
-        
-        # Display all available job information fields
-        fields_to_display = [
-            ('mandatory skills', '🔧 Mandatory Skills'),
-            ('nice to have skills', '✨ Nice to Have Skills'),
-            ('soft skills', '🤝 Soft Skills'),
-            ('experience industries', '🏭 Experience Industries'),
-            ('responsibilities', '📋 Responsibilities')
-        ]
-        
-        for field_key, field_label in fields_to_display:
-            field_value = job.get(field_key, 'N/A')
-            if field_value and field_value != 'N/A':
-                with st.expander(field_label):
-                    st.markdown(field_value)
+            st.link_button("🔗 Open Job", job_url, type="primary", use_container_width=True)
+            
+        with col3:
+            # View Details button - simplified approach
+            if st.button("📋 View Details", key=f"details_{index}", use_container_width=True):
+                # Direct API call without complex state management
+                with st.spinner("🔍 Fetching job details..."):
+                    try:
+                        # Get job details from server
+                        response = get_job_detail(job_url)
+                        
+                        if response.get("success"):
+                            job_detail = response.get("job_detail", "")
+                            
+                            if job_detail:
+                                # Display job details in an expandable section
+                                with st.expander("📋 Job Details", expanded=True):
+                                    st.markdown("### Job Information")
+                                    
+                                    # Try to parse and display job details in a more structured way
+                                    try:
+                                        # If job_detail is JSON string, try to parse it
+                                        import json
+                                        job_data = json.loads(job_detail)
+                                        
+                                        # Display structured job information
+                                        if isinstance(job_data, dict):
+                                            for key, value in job_data.items():
+                                                if value and value != "Unknown" and value != [] and value is not None:  # Only show non-empty values
+                                                    st.markdown(f"**{key.replace('_', ' ').title()}:**")
+                                                    if isinstance(value, str) and len(value) > 200:
+                                                        st.text_area(f"{key.replace('_', ' ').title()}", value=value, height=150, disabled=True, key=f"{key}_{index}_direct")
+                                                    else:
+                                                        st.write(value)
+                                                    st.markdown("---")
+                                        else:
+                                            st.text_area("Job Details", value=job_detail, height=300, disabled=True, key=f"job_detail_text_{index}_direct")
+                                    except (json.JSONDecodeError, TypeError):
+                                        # If not JSON, display as plain text
+                                        st.text_area("Job Details", value=job_detail, height=300, disabled=True, key=f"job_detail_text_{index}_direct")
+                                    
+                                    # Add a close button
+                                    if st.button("❌ Close Details", key=f"close_{index}_direct"):
+                                        st.rerun()
+                            else:
+                                st.warning("No job details available for this position.")
+                        else:
+                            st.error(f"Error: {response.get('message', 'Unknown error occurred')}")
+                            
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"❌ **Connection Error**")
+                        st.error(f"Failed to fetch job details: {str(e)}")
+                        st.error("Please make sure the server is running and try again.")
+                        
+                    except Exception as e:
+                        st.error(f"❌ **Unexpected Error**")
+                        st.error(f"An error occurred while fetching job details: {str(e)}")
+                
+        # Add some spacing
+        st.markdown("")
 
 def main():
     """
     Main function to run the Streamlit application.
     
     This function sets up the Streamlit interface, handles user input,
-    and displays job recommendations.
+    and displays job URLs.
     """
+    # Initialize session state for job details
+    if 'job_details_loaded' not in st.session_state:
+        st.session_state.job_details_loaded = False
+    
     # Page configuration
     st.set_page_config(
         page_title="Job Seeker - AI Job Recommendations",
@@ -134,6 +203,18 @@ def main():
         text-align: center;
         margin-bottom: 2rem;
     }
+    .job-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background-color: #f9f9f9;
+    }
+    .button-container {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -145,7 +226,7 @@ def main():
     if not check_server_health():
         st.error("⚠️ **Server Connection Error**")
         st.error("The job recommendation server is not running. Please start the server first by running:")
-        st.code("python server.py")
+        st.code("python server/main.py")
         st.stop()
     
     # Sidebar for input
@@ -166,13 +247,13 @@ def main():
         top_n = st.slider(
             "How many job recommendations would you like?",
             min_value=1,
-            max_value=10,
-            value=3,
-            help="Choose between 1 and 10 job recommendations"
+            max_value=20,
+            value=10,
+            help="Choose between 1 and 20 job recommendations"
         )
         
         # Submit button
-        submit_button = st.button("🚀 Get Recommendations", type="primary", use_container_width=True)
+        submit_button = st.button("🚀 Get Recommendations", key="submit_recommendations", type="primary", use_container_width=True)
         
         # Example descriptions
         st.subheader("💡 Need inspiration?")
@@ -196,27 +277,32 @@ def main():
                 response = get_job_recommendations(description.strip(), top_n)
                 
                 if response.get("success"):
-                    jobs = response.get("jobs", [])
+                    job_urls = response.get("job_urls", [])
                     
-                    if jobs:
-                        st.success(f"✅ Found {len(jobs)} job recommendations for you!")
+                    if job_urls:
+                        st.success(f"✅ Found {len(job_urls)} job recommendations for you!")
                         
-                        # Display jobs
-                        for i, job in enumerate(jobs):
-                            display_job_card(job, i)
+                        # Store job URLs in session state for persistence
+                        st.session_state.job_urls = job_urls
+                        st.session_state.user_description = description
+                        st.session_state.recommendations_requested = top_n
+                        
+                        # Display job URLs
+                        for i, job_url in enumerate(job_urls):
+                            display_job_url_card(job_url, i)
                         
                         # Summary
                         st.markdown("---")
-                        st.markdown(f"**Total recommendations found:** {len(jobs)}")
+                        st.markdown(f"**Total recommendations found:** {len(job_urls)}")
                         
                         # Export option
-                        if st.button("📥 Export Results"):
+                        if st.button("📥 Export Results", key="export_results"):
                             # Create export data
                             export_data = {
                                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                 "user_description": description,
                                 "recommendations_requested": top_n,
-                                "jobs": jobs
+                                "job_urls": job_urls
                             }
                             
                             # Convert to JSON
@@ -230,7 +316,7 @@ def main():
                                 mime="application/json"
                             )
                     else:
-                        st.warning("No job recommendations found. Try adjusting your description or preferences..")
+                        st.warning("No job recommendations found. Try adjusting your description or preferences.")
                 else:
                     st.error(f"Error: {response.get('message', 'Unknown error occurred')}")
                     
@@ -245,6 +331,39 @@ def main():
     
     elif submit_button and not description.strip():
         st.warning("⚠️ Please enter a description of your skills and experience.")
+    
+    # Display job URLs from session state (persistent display)
+    elif st.session_state.get('job_urls'):
+        st.success(f"✅ Found {len(st.session_state.job_urls)} job recommendations for you!")
+        
+        # Display job URLs
+        for i, job_url in enumerate(st.session_state.job_urls):
+            display_job_url_card(job_url, i)
+        
+        # Summary
+        st.markdown("---")
+        st.markdown(f"**Total recommendations found:** {len(st.session_state.job_urls)}")
+        
+        # Export option
+        if st.button("📥 Export Results", key="export_results_persistent"):
+            # Create export data
+            export_data = {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "user_description": st.session_state.get('user_description', ''),
+                "recommendations_requested": st.session_state.get('recommendations_requested', 0),
+                "job_urls": st.session_state.job_urls
+            }
+            
+            # Convert to JSON
+            json_str = json.dumps(export_data, indent=2, ensure_ascii=False)
+            
+            # Download button
+            st.download_button(
+                label="📄 Download JSON",
+                data=json_str,
+                file_name=f"job_recommendations_{time.strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
     
     # Footer
     st.markdown("---")

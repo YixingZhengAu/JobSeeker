@@ -1,323 +1,210 @@
 # Job Seeker - AI-Powered Job Recommendation System
 
-A comprehensive job recommendation system that uses AI to match users with relevant job opportunities based on their skills, experience, and career goals.
+An intelligent job recommendation system that uses AI to analyze user skills and experience, then provides personalized job URLs from Seek.com.au.
 
-## Features
+## 🚀 Features
 
-- 🤖 **AI-Powered Recommendations**: Uses OpenAI's GPT models for intelligent job matching
-- 🌐 **Web Interface**: User-friendly Streamlit frontend
-- 🔧 **RESTful API**: FastAPI backend for job recommendations
-- 📊 **Detailed Job Information**: Comprehensive job details including skills, responsibilities, and requirements
-- 🚀 **High Availability**: Deployed on AWS with auto-scaling and load balancing
-- 🔄 **Automated CI/CD**: GitHub Actions for continuous deployment
-- 🏗️ **Infrastructure as Code**: Terraform for reliable and reproducible deployments
+- **AI-Powered Recommendations**: Uses OpenAI's GPT models to analyze user descriptions and recommend relevant job titles
+- **Smart URL Generation**: Automatically generates and scrapes job URLs from Seek.com.au based on recommended job titles
+- **Clickable Job Links**: Users can directly click on job URLs to view and apply for positions
+- **Caching System**: Implements local database caching to avoid repeated scraping
+- **Modern Web Interface**: Clean Streamlit-based user interface
+- **RESTful API**: FastAPI backend for scalable job recommendation services
 
-## Architecture
+## 📋 Prerequisites
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Streamlit     │    │   FastAPI       │    │   Job Data      │
-│   Frontend      │◄──►│   Backend       │◄──►│   Database      │
-│   (Client)      │    │   (Server)      │    │   (JSON Files)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+- Python 3.8+
+- OpenAI API key
+- Internet connection for job scraping
 
-## 🚀 Deployment
+## 🛠️ Installation
 
-### Prerequisites
-
-Before deploying, ensure you have the following installed:
-- [AWS CLI](https://aws.amazon.com/cli/) configured with appropriate credentials
-- [Terraform](https://www.terraform.io/downloads.html) (v1.0+)
-- [Docker](https://www.docker.com/products/docker-desktop/) Desktop
-- [OpenAI API Key](https://platform.openai.com/api-keys)
-
-### Quick Deployment (Recommended)
-
-1. **Set up environment variables:**
-```bash
-   # Copy the example environment file
-   cp env.example .env
-   
-   # Edit .env file and add your OpenAI API key
-   nano .env
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd JobSeeker
    ```
 
-2. **Configure your .env file:**
+2. **Install dependencies**
    ```bash
-   # Required: Your OpenAI API key
-   OPENAI_API_KEY=your_actual_openai_api_key_here
+   pip install -r requirements.txt
+   ```
+
+3. **Set up environment variables**
+   ```bash
+   cp env.example .env
+   ```
    
-   # Optional: Customize models (defaults are good for most use cases)
+   Edit `.env` file and add your OpenAI API key:
+   ```
+   OPENAI_API_KEY=your_openai_api_key_here
    OPENAI_CHAT_MODEL=gpt-4o-mini
    OPENAI_EMBEDDING_MODEL=text-embedding-3-small
    ```
 
-3. **Run the automated deployment:**
+## 🚀 Usage
+
+### Starting the Server
+
+1. **Start the FastAPI server**
    ```bash
-   cd infrastructure/terraform
-   ./deploy.sh
+   python server/main.py
+   ```
+   
+   The server will run on `http://localhost:8000`
+
+2. **Verify server is running**
+   ```bash
+   curl http://localhost:8000/health
    ```
 
-The deployment script will:
-- ✅ Automatically read your OpenAI API key from `.env` file
-- ✅ Validate all required environment variables
-- ✅ Build and push Docker images to ECR
-- ✅ Deploy infrastructure with Terraform
-- ✅ Wait for services to be ready
-- ✅ Display access URLs and monitoring links
+### Running the Client
 
+1. **Start the Streamlit client**
+   ```bash
+   streamlit run client/app.py
+   ```
+   
+   The client will open in your browser at `http://localhost:8501`
 
-### Post-Deployment
+2. **Use the application**
+   - Enter your skills, experience, and career goals in the text area
+   - Choose the number of job recommendations (1-20)
+   - Click "Get Recommendations" to receive personalized job URLs
+   - Click on any job URL to open it in your browser
 
-After successful deployment, you'll see output similar to:
+## 🔧 API Endpoints
 
+### Health Check
 ```
-🎉 Deployment completed successfully!
-
-📋 Deployment Information:
-   Environment: production
-   AWS Region: ap-southeast-2
-   OpenAI Model: gpt-4o-mini
-
-🌐 Access URLs:
-   Client (Streamlit): http://production-job-seeker-alb-xxxxx.ap-southeast-2.elb.amazonaws.com:8501
-   Server API: http://production-job-seeker-alb-xxxxx.ap-southeast-2.elb.amazonaws.com
-   Health Check: http://production-job-seeker-alb-xxxxx.ap-southeast-2.elb.amazonaws.com/health
+GET /health
 ```
+Returns server health status.
 
-### Environment Variables
-
-The following environment variables can be configured in your `.env` file:
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `OPENAI_API_KEY` | Your OpenAI API key | - | ✅ Yes |
-| `OPENAI_CHAT_MODEL` | OpenAI chat model for recommendations | `gpt-4o-mini` | No |
-| `OPENAI_EMBEDDING_MODEL` | OpenAI embedding model | `text-embedding-3-small` | No |
-| `AWS_REGION` | AWS region for deployment | `ap-southeast-2` | No |
-| `ENVIRONMENT` | Environment name | `production` | No |
-
-### Troubleshooting
-
-**Common Issues:**
-
-1. **"OpenAI API key appears to be a placeholder value"**
-   - Solution: Update your `.env` file with a valid OpenAI API key
-
-2. **"AWS credentials not configured"**
-   - Solution: Run `aws configure` and set up your AWS credentials
-
-3. **"Docker is not installed"**
-   - Solution: Install Docker Desktop and ensure it's running
-
-4. **"Terraform is not installed"**
-   - Solution: Install Terraform from the official website
-
-**Getting Help:**
-- Check the deployment logs for detailed error messages
-- Verify all prerequisites are installed and configured
-- Ensure your OpenAI API key is valid and has sufficient credits
-  
-
-## System Cleanup and Destruction
-
-⚠️ **IMPORTANT**: To prevent AWS billing charges, always destroy the infrastructure when you're done testing or using the system.
-
-### Method 1: Using Terraform Destroy Script (Recommended)
-
-The project includes a comprehensive destroy script that safely removes all resources:
-
-```bash
-# Navigate to the terraform directory first
-cd infrastructure/terraform
-
-# Run the destroy script
-./destroy.sh
+### Job Recommendations
+```
+POST /recommend
 ```
 
-This script will:
-- Check if infrastructure exists
-- Display resources to be destroyed
-- Ask for confirmation
-- Destroy all AWS resources in the correct order
-- Clean up ECR repositories with force delete
-- Remove all associated data and configurations
-
-**Note**: The destroy script must be run from the `infrastructure/terraform` directory, not from the project root.
-
-
-### What Gets Destroyed
-
-The destruction process removes all AWS resources including:
-
-- **ECS Services**: `production-job-seeker-server`, `production-job-seeker-client`
-- **ECS Cluster**: `production-job-seeker-cluster`
-- **ECR Repositories**: `job-seeker-server`, `job-seeker-client`
-- **Application Load Balancer**: `production-job-seeker-alb`
-- **Target Groups**: Server and client target groups
-- **VPC**: Complete VPC with all subnets
-- **Security Groups**: ALB and ECS security groups
-- **NAT Gateway**: With associated Elastic IP
-- **Internet Gateway**: VPC internet gateway
-- **Route Tables**: Public and private route tables
-- **CloudWatch Log Groups**: Application logs
-- **IAM Roles**: ECS task execution role
-
-### Verification
-
-After destruction, verify all resources are removed:
-
-```bash
-# Check ECS services
-aws ecs list-services --cluster production-job-seeker-cluster --region ap-southeast-2
-
-# Check ECR repositories
-aws ecr describe-repositories --region ap-southeast-2 | grep job-seeker
-
-# Check ALB
-aws elbv2 describe-load-balancers --region ap-southeast-2 | grep job-seeker
-
-# Check VPC
-aws ec2 describe-vpcs --region ap-southeast-2 | grep job-seeker
-```
-
-### Cost Savings
-
-Destroying the infrastructure will stop all AWS charges:
-
-- **ECS Fargate**: ~$40-80/month (stopped)
-- **ALB**: ~$20-30/month (stopped)
-- **NAT Gateway**: ~$45/month (stopped)
-- **Data Transfer**: ~$10-20/month (stopped)
-- **Total Savings**: ~$115-175/month
-
-
-## Project Structure
-
-```
-JobSeeker/
-├── server/                          # FastAPI server
-│   ├── main.py                      # Server application
-│   ├── requirements.txt             # Server dependencies
-│   └── Dockerfile                   # Server container
-├── client/                          # Streamlit client
-│   ├── app.py                       # Client application
-│   ├── requirements.txt             # Client dependencies
-│   └── Dockerfile                   # Client container
-├── job_recommender/                 # Core recommendation engine
-│   ├── job_recommender.py           # Main recommendation logic
-│   ├── job_description_analyzer.py  # Job analysis
-│   ├── job_reranker.py              # Job ranking
-│   ├── seek_scraper.py              # Job scraping
-│   └── job_urls_database/           # Job data storage
-├── infrastructure/                  # AWS infrastructure
-│   └── terraform/                   # Terraform configuration
-│       ├── main.tf                  # Main Terraform configuration
-│       ├── variables.tf             # Variable definitions
-│       ├── outputs.tf               # Output values
-│       ├── terraform.tfvars         # Variable values
-│       ├── deploy.sh                # Deployment script
-│       ├── destroy.sh               # Destruction script
-│       ├── test.sh                  # Testing script
-│       └── modules/                 # Terraform modules
-│           ├── vpc/                 # VPC module
-│           ├── ecr/                 # ECR module
-│           ├── ecs/                 # ECS module
-│           └── alb/                 # ALB module
-├── .github/                         # GitHub Actions
-│   └── workflows/
-│       └── deploy.yml               # CI/CD pipeline
-├── docker-compose.yml               # Local development
-├── env.example                      # Environment template
-└── README.md                        # This file
-```
-
-## API Documentation
-
-### Server Endpoints
-
-- `GET /health` - Health check
-- `POST /recommend` - Get job recommendations
-
-### Request Format
-
+**Request Body:**
 ```json
 {
-  "description": "I am a software engineer with 5 years of experience...",
-  "top_n": 3
+  "description": "Your skills and experience description",
+  "top_n": 10
 }
 ```
 
-### Response Format
-
+**Response:**
 ```json
 {
   "success": true,
-  "jobs": [
-    {
-      "url": "https://example.com/job",
-      "title": "Senior Software Engineer",
-      "company": "Tech Company",
-      "mandatory skills": "Python, JavaScript, React",
-      "nice to have skills": "AWS, Docker, Kubernetes",
-      "soft skills": "Communication, Leadership",
-      "experience industries": "Technology, Finance",
-      "responsibilities": "Lead development team..."
-    }
+  "job_urls": [
+    "https://www.seek.com.au/job/123456",
+    "https://www.seek.com.au/job/789012"
   ],
-  "message": "Successfully found 3 job recommendations"
+  "message": "Successfully found 10 job recommendations"
 }
 ```
 
-## Configuration
+## 🏗️ Architecture
 
-### Environment Variables
+### Components
+
+1. **JobRecommender** (`job_recommender/job_recommender.py`)
+   - Core AI logic for job title recommendations
+   - URL generation and scraping functionality
+   - Local database caching system
+
+2. **FastAPI Server** (`server/main.py`)
+   - RESTful API endpoints
+   - Request/response handling
+   - Integration with JobRecommender
+
+3. **Streamlit Client** (`client/app.py`)
+   - User-friendly web interface
+   - Real-time job URL display
+   - Export functionality
+
+### Data Flow
+
+1. User enters description in Streamlit client
+2. Client sends request to FastAPI server
+3. Server calls JobRecommender to get job titles
+4. JobRecommender generates search URLs and scrapes job listings
+5. Server returns job URLs to client
+6. Client displays clickable job links
+
+## 🧪 Testing
+
+Run the integration test to verify everything is working:
+
+```bash
+python test_integration.py
+```
+
+## 📁 Project Structure
+
+```
+JobSeeker/
+├── job_recommender/          # Core AI recommendation logic
+│   ├── job_recommender.py    # Main recommendation class
+│   ├── seek_scraper.py       # Web scraping functionality
+│   ├── job_description_analyzer.py
+│   ├── job_reranker.py
+│   └── job_urls_database/    # Local caching database
+├── server/                   # FastAPI backend
+│   ├── main.py              # API server
+│   └── requirements.txt
+├── client/                   # Streamlit frontend
+│   ├── app.py               # Web interface
+│   └── requirements.txt
+├── infrastructure/           # Terraform deployment
+├── config.py                # Configuration settings
+├── requirements.txt         # Main dependencies
+└── README.md
+```
+
+## 🔒 Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key | Required |
-| `OPENAI_CHAT_MODEL` | Chat model name | `gpt-4o-mini` |
-| `OPENAI_EMBEDDING_MODEL` | Embedding model name | `text-embedding-3-small` |
-| `API_BASE_URL` | Server API URL | `http://localhost:8000` |
+| `OPENAI_API_KEY` | Your OpenAI API key | Required |
+| `OPENAI_CHAT_MODEL` | OpenAI chat model name | `gpt-4o-mini` |
+| `OPENAI_EMBEDDING_MODEL` | OpenAI embedding model | `text-embedding-3-small` |
+| `API_BASE_URL` | Server URL for client | `http://localhost:8000` |
 
-### Terraform Variables
+## 🐛 Troubleshooting
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `environment` | Environment name | `production` |
-| `aws_region` | AWS region | `ap-southeast-2` |
-| `openai_api_key` | OpenAI API key | Required |
-| `openai_chat_model` | OpenAI chat model | `gpt-4o-mini` |
-| `openai_embedding_model` | OpenAI embedding model | `text-embedding-3-small` |
+### Common Issues
 
-## Monitoring and Logging
+1. **Server not starting**
+   - Check if OpenAI API key is set correctly
+   - Verify all dependencies are installed
+   - Check port 8000 is not in use
 
-### CloudWatch Logs
-- Server logs: `/ecs/{environment}-job-seeker-server`
-- Client logs: `/ecs/{environment}-job-seeker-client`
+2. **No job recommendations**
+   - Ensure internet connection is available
+   - Check if Seek.com.au is accessible
+   - Verify the description is detailed enough
 
-### Health Checks
-- Server: `GET /health` every 30 seconds
-- Client: `GET /_stcore/health` every 30 seconds
+3. **Import errors**
+   - Make sure you're in the correct directory
+   - Install all requirements: `pip install -r requirements.txt`
 
-### Auto Scaling
-- CPU utilization threshold: 70%
-- Scale-out cooldown: 60 seconds
-- Scale-in cooldown: 60 seconds
+## 🤝 Contributing
 
-## Cost Estimation
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-### Monthly AWS Costs (ap-southeast-2)
-- **ECS Fargate**: $40-80 (2 tasks running 24/7)
-- **ALB**: $20-30
-- **NAT Gateway**: $45
-- **CloudWatch**: $10-20
-- **Data Transfer**: $10-20
-- **Total**: $125-195/month
+## 📄 License
 
-*Costs may vary based on usage and region*
+This project is licensed under the MIT License - see the LICENSE file for details.
 
----
+## 🙏 Acknowledgments
 
-**Built with ❤️ using FastAPI, Streamlit, Terraform, and AWS**
+- OpenAI for providing the AI models
+- Seek.com.au for job listings
+- FastAPI and Streamlit communities for excellent frameworks

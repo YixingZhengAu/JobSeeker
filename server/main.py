@@ -21,8 +21,9 @@ current_dir = Path(__file__).parent
 parent_dir = current_dir.parent
 sys.path.insert(0, str(parent_dir))
 
-# Import the job recommendation function
-from job_recommender import recommend_jobs
+# Import the JobRecommender class
+from job_recommender.job_recommender import JobRecommender
+import config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,16 +45,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize JobRecommender
+try:
+    recommender = JobRecommender(
+        api_key=config.OPENAI_API_KEY,
+        openai_chat_model=config.OPENAI_CHAT_MODEL,
+        openai_embedding_model=config.OPENAI_EMBEDDING_MODEL
+    )
+    logger.info("JobRecommender initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize JobRecommender: {e}")
+    recommender = None
+
 class JobRecommendationRequest(BaseModel):
     """
     Request model for job recommendation.
     
     Attributes:
         description (str): User's description of skills, experience, and career goals
-        top_n (int): Number of job recommendations to return (default: 3, max: 10)
+        top_n (int): Number of job recommendations to return (default: 10, max: 20)
     """
     description: str = Field(..., min_length=10, description="User's description of skills, experience, and career goals")
-    top_n: int = Field(default=3, ge=1, le=10, description="Number of job recommendations to return")
+    top_n: int = Field(default=10, ge=1, le=20, description="Number of job recommendations to return")
 
 class JobRecommendationResponse(BaseModel):
     """
@@ -61,11 +74,33 @@ class JobRecommendationResponse(BaseModel):
     
     Attributes:
         success (bool): Whether the request was successful
-        jobs (List[Dict]): List of recommended jobs with details
+        job_urls (List[str]): List of recommended job URLs
         message (str): Additional message or error information
     """
     success: bool
-    jobs: List[Dict[str, Any]]
+    job_urls: List[str]
+    message: str
+
+class JobDetailRequest(BaseModel):
+    """
+    Request model for job detail.
+    
+    Attributes:
+        job_url (str): The job URL to get details for
+    """
+    job_url: str = Field(..., description="The job URL to get details for")
+
+class JobDetailResponse(BaseModel):
+    """
+    Response model for job detail.
+    
+    Attributes:
+        success (bool): Whether the request was successful
+        job_detail (str): The job detail content
+        message (str): Additional message or error information
+    """
+    success: bool
+    job_detail: str
     message: str
 
 @app.get("/")
@@ -94,54 +129,101 @@ async def get_job_recommendations(request: JobRecommendationRequest):
     Get job recommendations based on user description.
     
     This endpoint accepts a user's description of their skills, experience,
-    and career goals, then returns personalized job recommendations.
+    and career goals, then returns personalized job URLs.
     
     Args:
         request (JobRecommendationRequest): The request containing user description and number of recommendations
         
     Returns:
-        JobRecommendationResponse: List of recommended jobs with details
+        JobRecommendationResponse: List of recommended job URLs
         
     Raises:
         HTTPException: If there's an error processing the request
     """
+    if not recommender:
+        raise HTTPException(
+            status_code=500,
+            detail="JobRecommender is not properly initialized"
+        )
+    
     try:
         logger.info(f"Received job recommendation request for top_n={request.top_n}")
         
         # Call the job recommendation function
-        recommended_jobs = recommend_jobs(
+        job_urls = recommender.recommend_jobs_urls(
             description=request.description,
             top_n=request.top_n
         )
         
-        # Format the response
-        jobs_data = []
-        for job in recommended_jobs:
-            job_url, similarity_score, job_detail = job
-            
-            job_info = {
-                "url": job_url,
-                "similarity_score": float(similarity_score),
-                "title": job_detail.get("job_title", "N/A"),
-                "company": job_detail.get("company_name", "N/A"),
-                "mandatory skills": job_detail.get("skills_mandatory", "N/A"),
-                "nice to have skills": job_detail.get("skills_nice_to_have", "N/A"),
-                "soft skills": job_detail.get("soft_skills", "N/A"),
-                "experience industries": job_detail.get("experience_industries", "N/A"),
-                "responsibilities": job_detail.get("responsibilities", "N/A")
-            }
-            jobs_data.append(job_info)
-        
-        logger.info(f"Successfully returned {len(jobs_data)} job recommendations")
+        logger.info(f"Successfully returned {len(job_urls)} job URLs")
         
         return JobRecommendationResponse(
             success=True,
-            jobs=jobs_data,
-            message=f"Successfully found {len(jobs_data)} job recommendations"
+            job_urls=job_urls,
+            message=f"Successfully found {len(job_urls)} job recommendations"
         )
         
     except Exception as e:
         logger.error(f"Error processing job recommendation request: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+@app.post("/job-detail", response_model=JobDetailResponse)
+async def get_job_detail(request: JobDetailRequest):
+    """
+    Get detailed information for a specific job URL.
+    
+    This endpoint accepts a job URL and returns detailed information about the job,
+    including job description, requirements, and other relevant details.
+    
+    Args:
+        request (JobDetailRequest): The request containing the job URL
+        
+    Returns:
+        JobDetailResponse: Detailed job information
+        
+    Raises:
+        HTTPException: If there's an error processing the request
+    """
+    logger.info(f"=== Job Detail Endpoint Called ===")
+    logger.info(f"Request received: {request.job_url}")
+    
+    if not recommender:
+        logger.error("JobRecommender is not initialized")
+        raise HTTPException(
+            status_code=500,
+            detail="JobRecommender is not properly initialized"
+        )
+    
+    try:
+        logger.info(f"Calling recommender.get_job_detail for URL: {request.job_url}")
+        
+        # Call the job detail function
+        job_detail = recommender.get_job_detail(request.job_url)
+        
+        logger.info(f"Successfully retrieved job detail for URL: {request.job_url}")
+        logger.info(f"Job detail length: {len(str(job_detail))}")
+        
+        # Convert job_detail to string if it's a dict
+        if isinstance(job_detail, dict):
+            import json
+            job_detail_str = json.dumps(job_detail, ensure_ascii=False, indent=2)
+        else:
+            job_detail_str = str(job_detail)
+        
+        return JobDetailResponse(
+            success=True,
+            job_detail=job_detail_str,
+            message="Successfully retrieved job details"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing job detail request: {str(e)}")
+        logger.error(f"Exception type: {type(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"

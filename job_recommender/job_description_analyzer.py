@@ -7,7 +7,10 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 import os
-from .utils import load_prompt
+try:
+    from .utils import load_prompt
+except ImportError:
+    from utils import load_prompt
 from dotenv import load_dotenv
 
 

@@ -4,7 +4,10 @@ import json
 import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
-from .utils import save_json, read_json
+try:
+    from .utils import save_json, read_json
+except ImportError:
+    from utils import save_json, read_json
 
 
 class JobReranker:
