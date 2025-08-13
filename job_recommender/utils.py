@@ -23,6 +23,7 @@ def read_json(path):
     return data
 
 
+
 def load_prompt(prompt_name: str) -> str:
     """
     Load a prompt template from the prompts directory

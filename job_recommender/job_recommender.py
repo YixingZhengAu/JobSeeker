@@ -12,13 +12,12 @@ try:
     from .seek_scraper import SeekJobScraper
     from .utils import load_prompt, save_json, read_json
     from .job_description_analyzer import JobDescriptionAnalyzer
-    from .job_reranker import JobReranker
 except ImportError:
     # Fallback to absolute imports if relative imports fail
     from seek_scraper import SeekJobScraper
     from utils import load_prompt, save_json, read_json
     from job_description_analyzer import JobDescriptionAnalyzer
-    from job_reranker import JobReranker
+
 
 
 class JobTitleRecord(BaseModel):
@@ -68,8 +67,6 @@ class JobRecommender(object):
         self.scraper = SeekJobScraper()
         self.analyzer = JobDescriptionAnalyzer(api_key=self.api_key, 
             openai_chat_model=self.openai_chat_model)
-        self.reranker = JobReranker(api_key=self.api_key, 
-            openai_embedding_model=self.openai_embedding_model)
         
         # Initialize database
         self._init_database()
@@ -87,6 +84,11 @@ class JobRecommender(object):
         self.search_url_table_path = os.path.join(self.db_dir, "search_url_table.json")
         if not os.path.exists(self.search_url_table_path):
             save_json(self.search_url_table_path, {})
+
+        # Initialize job_content_table.json if it doesn't exist
+        self.job_content_table_path = os.path.join(self.db_dir, "job_content_table.json")
+        if not os.path.exists(self.job_content_table_path):
+            save_json(self.job_content_table_path, {})
 
         # Initialize job_details_table.json if it doesn't exist
         self.job_detail_table_path = os.path.join(self.db_dir, "job_detail_table.json")
@@ -122,6 +124,21 @@ class JobRecommender(object):
             search_url_table = read_json(self.search_url_table_path)
             search_url_table[search_url] = data
             save_json(self.search_url_table_path, search_url_table)
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+
+    def save_job_content_to_database(self, job_url: str, data):
+        """
+        Save job html data to the local database
+
+        Args:
+            job_url (str): The job URL as the key
+            data: The job detail data to save
+        """
+        try:
+            job_url_table = read_json(self.job_content_table_path)
+            job_url_table[job_url] = data
+            save_json(self.job_content_table_path, job_url_table)
         except Exception as e:
             print(f"Error saving to database: {e}")
 
@@ -216,22 +233,6 @@ class JobRecommender(object):
             
         return all_job_urls
 
-    def get_job_details_by_urls(self, job_urls: List[str]) -> List[str]:
-        """
-        Retrieve job details for a list of job URLs. If details are missing from the database, scrape and store them.
-
-        Args:
-            job_urls (List[str]): List of job URLs.
-
-        Returns:
-            Dict[str, dict]: Dictionary mapping job URLs to their job detail dictionaries.
-        """
-        all_job_details = {}
-        for job_url in job_urls:
-            job_details = self.get_job_detail(job_url)
-            all_job_details[job_url] = job_details
-        return all_job_details
-
     def get_job_detail(self, job_url: str) -> str:
         """
         Get job detail by job URL. If job detail is not in the database, scrape and save to database.
@@ -242,6 +243,8 @@ class JobRecommender(object):
         else:
             job_content = self.scraper.get_job_content(job_url)
             job_detail = self.analyzer.parse_job_html_to_json(job_content)
+
+            self.save_job_content_to_database(job_url, {'job_content': job_content})
             self.save_job_detail_to_database(job_url, job_detail)
             return job_detail
 
@@ -333,8 +336,11 @@ def main():
     try:
         # Get job recommendations
         print("Generating job recommendations...")
-        jobs = recommender.recommend_jobs_urls(description)
-        print(jobs) 
+        urls = recommender.recommend_jobs_urls(description, top_n=100)
+        
+        for url in urls:
+            job_detail = recommender.get_job_detail(url)
+            print(job_detail)
 
         
     except Exception as e:

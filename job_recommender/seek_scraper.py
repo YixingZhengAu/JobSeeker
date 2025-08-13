@@ -274,11 +274,21 @@ class SeekJobScraper:
             
             if response.status_code != 200:
                 print(f"Failed to get response from job page: {response.status_code}")
-                print(f"Response content: {response.text}")
+                print(f"Response content: {response.text[:500]}...")  # Show first 500 chars
                 return None
 
             else:
                 html_content = response.content.decode(response.encoding or 'utf-8', errors='replace')
+                
+                # Debug: Check if we got a browser upgrade page
+                if "Browser Upgrade" in html_content or "browser" in html_content.lower():
+                    print("Warning: Received browser upgrade page, may need to adjust scraper settings")
+                
+                # Debug: Check if we got the job content
+                if "job-detail-title" in html_content or "jobDescription" in html_content:
+                    print("Success: Found job content indicators")
+                else:
+                    print("Warning: No job content indicators found")
                 
                 # Clean the HTML content
                 cleaned_html = self._clean_html_content(html_content)
@@ -306,77 +316,112 @@ class SeekJobScraper:
             for element in soup(['script', 'style', 'noscript']):
                 element.decompose()
             
-            # Remove common irrelevant elements
-            irrelevant_selectors = [
-                # Navigation and header elements
-                'header', 'nav', '.header', '.navigation', '.navbar',
-                # Footer elements
-                'footer', '.footer', '.site-footer',
-                # Sidebar and ads
-                '.sidebar', '.advertisement', '.ads', '[class*="ad-"]',
-                # Social media and sharing
-                '.social', '.share', '.social-media',
-                # Breadcrumbs
-                '.breadcrumb', '.breadcrumbs',
-                # Search and filter elements
-                '.search', '.filter', '.filters',
-                # Pagination (not needed for single job page)
-                '.pagination', '.pager',
-                # Related jobs section
-                '.related-jobs', '.similar-jobs',
-                # Cookie notices and popups
-                '.cookie-notice', '.popup', '.modal',
-                # Analytics and tracking
-                '[data-analytics]', '[data-tracking]',
-                # Common irrelevant classes
-                '.hidden', '.invisible', '.sr-only',
-                # Comments
-                'comment',
+            # First, try to find the job description content specifically
+            job_description = None
+            
+            # Look for job description in specific areas
+            job_selectors = [
+                '[data-automation="jobDescription"]',
+                '.job-description',
+                '.job-content',
+                '.job-details',
+                '.job-info',
             ]
             
-            for selector in irrelevant_selectors:
-                for element in soup.select(selector):
+            for selector in job_selectors:
+                job_description = soup.select_one(selector)
+                if job_description:
+                    break
+            
+            # If we found job description, extract only that content
+            if job_description:
+                # Create a new soup with just the job description
+                new_soup = BeautifulSoup('<html><body></body></html>', 'html.parser')
+                new_soup.body.append(job_description)
+                soup = new_soup
+            else:
+                # If no specific job description found, try to find main content
+                main_content = soup.select_one('[role="main"]') or soup.select_one('main')
+                if main_content:
+                    # Remove irrelevant sections from main content
+                    irrelevant_sections = [
+                        '[data-automation="dynamic-lmis"]',
+                        '[data-automation="report-job-ad-toggle"]',
+                        '[data-automation="report-job-ad-form"]',
+                        '[data-automation="company-profile"]',
+                        'h2:contains("Report this job advert")',
+                        'h2:contains("Unlock job insights")',
+                        'h2:contains("What can I earn")',
+                        'h3:contains("Company profile")',
+                        'h4:contains("Perks and benefits")',
+                        'a[href*="/oauth/login"]',
+                        'a[href*="/oauth/register"]',
+                        'a:contains("Sign In")',
+                        'a:contains("Register")',
+                        'span:contains("Be careful")',
+                        'span:contains("Don\'t provide your bank")',
+                        'a:contains("Learn how to protect yourself")',
+                        '.lmis-root',
+                        # Additional irrelevant sections
+                        'span:contains("Salary match")',
+                        'span:contains("Number of applicants")',
+                        'span:contains("Skills match")',
+                        'span:contains("Add expected salary")',
+                        'span:contains("Posted")',
+                        'a:contains("Apply")',
+                        'div:contains("Don\'t provide your bank")',
+                    ]
+                    
+                    for selector in irrelevant_sections:
+                        for element in main_content.select(selector):
+                            element.decompose()
+                    
+                    # Create a new soup with just the cleaned main content
+                    new_soup = BeautifulSoup('<html><body></body></html>', 'html.parser')
+                    new_soup.body.append(main_content)
+                    soup = new_soup
+            
+            # Remove UI elements that are not part of job description
+            ui_elements = [
+                'button',
+                'form',
+                'select',
+                'option',
+                'label',
+                'img',
+            ]
+            
+            for element_name in ui_elements:
+                for element in soup.find_all(element_name):
                     element.decompose()
             
-            # Remove elements with specific attributes that are usually irrelevant
-            for element in soup.find_all(attrs={
-                'data-testid': lambda x: x and any(keyword in x.lower() for keyword in ['ad', 'tracking', 'analytics', 'cookie'])
-            }):
-                element.decompose()
+            # Remove elements with specific data-automation attributes that are irrelevant
+            irrelevant_automation = [
+                'report-job-ad-toggle',
+                'report-job-ad-form',
+                'report-job-ad-reason',
+                'report-job-ad-submit',
+                'report-job-ad-cancel',
+                'dynamic-lmis',
+                'company-profile',
+                'company-profile-review',
+                'company-profile-review-link',
+                'company-profile-profile-link',
+                'job-header-company-review-link',
+                'job-details-header-more-jobs',
+            ]
+            
+            for automation in irrelevant_automation:
+                for element in soup.find_all(attrs={'data-automation': automation}):
+                    element.decompose()
             
             # Remove empty elements
             for element in soup.find_all():
                 if element.name in ['div', 'span', 'p'] and not element.get_text(strip=True):
                     element.decompose()
             
-            # Keep only the main job content area
-            main_content_selectors = [
-                '[data-automation="jobDescription"]',
-                '.job-description',
-                '.job-content',
-                'main',
-                '.main-content',
-                '[role="main"]',
-                '.job-details',
-                '.job-info',
-            ]
-            
-            # Try to find the main content area
-            main_content = None
-            for selector in main_content_selectors:
-                main_content = soup.select_one(selector)
-                if main_content:
-                    break
-            
-            # If we found main content, keep only that
-            if main_content:
-                # Create a new soup with just the main content
-                new_soup = BeautifulSoup('<html><body></body></html>', 'html.parser')
-                new_soup.body.append(main_content)
-                soup = new_soup
-            
             # Remove excessive whitespace and normalize text
-            for element in soup.find_all(text=True):
+            for element in soup.find_all(string=True):
                 if element.parent.name not in ['script', 'style']:
                     # Normalize whitespace
                     normalized_text = ' '.join(element.strip().split())
@@ -388,6 +433,63 @@ class SeekJobScraper:
             
             # Additional text cleaning
             cleaned_html = self._clean_text_content(cleaned_html)
+            
+            # Remove all class attributes from remaining elements
+            cleaned_html = re.sub(r'\s+class="[^"]*"', '', cleaned_html)
+            
+            # Remove all style attributes
+            cleaned_html = re.sub(r'\s+style="[^"]*"', '', cleaned_html)
+            
+            # Remove all data-* attributes except data-automation="job-detail-title"
+            cleaned_html = re.sub(r'\s+data-(?!automation="job-detail-title")[^=]*="[^"]*"', '', cleaned_html)
+            
+            # Remove all aria-* attributes
+            cleaned_html = re.sub(r'\s+aria-[^=]*="[^"]*"', '', cleaned_html)
+            
+            # Remove all role attributes except role="main"
+            cleaned_html = re.sub(r'\s+role="(?!main)[^"]*"', '', cleaned_html)
+            
+            # Remove all id attributes
+            cleaned_html = re.sub(r'\s+id="[^"]*"', '', cleaned_html)
+            
+            # Remove all href attributes that are not job-related
+            cleaned_html = re.sub(r'\s+href="(?!.*job)[^"]*"', '', cleaned_html)
+            
+            # Remove all target attributes
+            cleaned_html = re.sub(r'\s+target="[^"]*"', '', cleaned_html)
+            
+            # Remove all rel attributes
+            cleaned_html = re.sub(r'\s+rel="[^"]*"', '', cleaned_html)
+            
+            # Remove all tabindex attributes
+            cleaned_html = re.sub(r'\s+tabindex="[^"]*"', '', cleaned_html)
+            
+            # Remove all placeholder attributes
+            cleaned_html = re.sub(r'\s+placeholder="[^"]*"', '', cleaned_html)
+            
+            # Remove all disabled attributes
+            cleaned_html = re.sub(r'\s+disabled="[^"]*"', '', cleaned_html)
+            
+            # Remove all selected attributes
+            cleaned_html = re.sub(r'\s+selected="[^"]*"', '', cleaned_html)
+            
+            # Remove all value attributes
+            cleaned_html = re.sub(r'\s+value="[^"]*"', '', cleaned_html)
+            
+            # Remove all type attributes
+            cleaned_html = re.sub(r'\s+type="[^"]*"', '', cleaned_html)
+            
+            # Remove all span elements that are likely just styling
+            cleaned_html = re.sub(r'<span[^>]*>\s*</span>', '', cleaned_html)
+            
+            # Remove all div elements that are likely just styling containers
+            cleaned_html = re.sub(r'<div[^>]*>\s*</div>', '', cleaned_html)
+            
+            # Clean up excessive whitespace again
+            cleaned_html = re.sub(r'\s+', ' ', cleaned_html)
+            cleaned_html = re.sub(r'>\s+<', '><', cleaned_html)
+            cleaned_html = re.sub(r'\s+>', '>', cleaned_html)
+            cleaned_html = re.sub(r'>\s+', '>', cleaned_html)
             
             print(f"HTML cleaned: Original size: {len(html_content)}, Cleaned size: {len(cleaned_html)}")
             
@@ -477,13 +579,13 @@ def main():
     scraper = SeekJobScraper()
 
     # Get job URLs from search page
-    job_urls = scraper.get_job_urls("https://www.seek.com.au/data-scientist-jobs/in-Melbourne-VIC-3000", max_pages=2)
-
+    job_url = "https://www.seek.com.au/job/85848899?type=standard&ref=search-standalone&origin=cardTitle"
     # Get detailed content from a job
-    job_html = scraper.get_job_content(job_urls[0])
+    job_html = scraper.get_job_content(job_url)
+
+    print(job_html)
 
     # Save results
-    scraper.save_job_urls(job_urls, 'job_urls.json')
     scraper.save_job_content(job_html, 'job_html.json')
 
 

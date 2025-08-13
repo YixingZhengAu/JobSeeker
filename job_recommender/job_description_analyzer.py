@@ -7,6 +7,7 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 import os
+
 try:
     from .utils import load_prompt
 except ImportError:
@@ -164,21 +165,27 @@ def main():
     """
     Test function using the job_html.json file
     """
+
     try:
-        # Read the test HTML content
-        with open('job_html.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            html_content = data['job_html']
+        import sys
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        import config
+
+        from seek_scraper import SeekJobScraper
+        job_url = "https://www.seek.com.au/job/86406417?type=promoted&ref=search-standalone&origin=cardTitle"
+        scraper = SeekJobScraper()
+        analyzer = JobDescriptionAnalyzer(config.OPENAI_API_KEY, config.OPENAI_CHAT_MODEL)
         
-        # Parse the HTML content
-        analyzer = JobDescriptionAnalyzer()
-        result = analyzer.parse_job_html_to_json(html_content)
+        job_content = scraper.get_job_content(job_url)
+        job_detail = analyzer.parse_job_html_to_json(job_content)
         
         # Print the result
+        print(job_content)
+        print("--------------------------------")
         print("Parsed Job Information:")
-        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        print(json.dumps(job_detail, indent=2, ensure_ascii=False, default=str))
         
-        return result
+        return job_detail
         
     except Exception as e:
         print(f"Test failed: {str(e)}")
